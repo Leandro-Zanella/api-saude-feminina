@@ -43,6 +43,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/user/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/user/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/user").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/media/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/article").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/article/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/article/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/media").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
@@ -61,8 +66,9 @@ public class SecurityConfig {
         return new ProviderManager(provider);
     }
 
+    /** Estático para não exigir a instância desta classe e evitar ciclo com o UserService. */
     @Bean
-    public PasswordEncoder passwordEncoder() {
+    public static PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 

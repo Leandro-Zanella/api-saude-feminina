@@ -13,14 +13,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -30,16 +28,13 @@ public class UserController {
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
-    private final PasswordEncoder passwordEncoder;
 
     public UserController(UserService userService,
                           AuthenticationManager authenticationManager,
-                          TokenService tokenService,
-                          PasswordEncoder passwordEncoder) {
+                          TokenService tokenService) {
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.tokenService = tokenService;
-        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
@@ -55,13 +50,7 @@ public class UserController {
         if (userService.existsByEmail(userDto.email())) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new CustomMessage("Este e-mail já está em uso!"));
         }
-        var userModel = new UserModel();
-        userModel.setName(userDto.name());
-        userModel.setEmail(userDto.email());
-        userModel.setPassword(passwordEncoder.encode(userDto.password()));
-        userModel.setRole(userDto.userRole());
-        userModel.setCreatedAt(LocalDateTime.now());
-        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponseDto.from(userService.save(userModel)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponseDto.from(userService.register(userDto)));
     }
 
     @GetMapping
