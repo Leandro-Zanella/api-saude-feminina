@@ -41,8 +41,9 @@ public class UserController {
     public ResponseEntity<LoginResponseDto> login(@RequestBody @Valid LoginDto loginDto) {
         var usernamePassword = new UsernamePasswordAuthenticationToken(loginDto.email(), loginDto.password());
         var auth = this.authenticationManager.authenticate(usernamePassword);
-        var token = tokenService.generateToken((UserModel) auth.getPrincipal());
-        return ResponseEntity.ok(new LoginResponseDto(token));
+        var userModel = (UserModel) auth.getPrincipal();
+        var token = tokenService.generateToken(userModel);
+        return ResponseEntity.ok(new LoginResponseDto(UserResponseDto.from(userModel), token));
     }
 
     @PostMapping("/register")

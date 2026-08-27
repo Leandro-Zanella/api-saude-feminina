@@ -1,4 +1,5 @@
 package api.saude.feminina.dto.user;
 
-public record LoginResponseDto(String token){
+/** Saída do login: o usuário autenticado e o token. */
+public record LoginResponseDto(UserResponseDto user, String token) {
 }

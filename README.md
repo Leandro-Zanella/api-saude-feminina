@@ -157,7 +157,7 @@ Contratos de entrada e saída da API, como records. Isola a entidade do corpo da
 |---|---|
 | `UserDto` | Entrada do registro, com as anotações de validação. O papel chega como texto: a web envia `ADMIN`, o app envia `USER` |
 | `LoginDto` | Entrada do login |
-| `LoginResponseDto` | Saída do login: o token |
+| `LoginResponseDto` | Saída do login: o usuário autenticado (`UserResponseDto`) e o token. O usuário vai junto para o cliente não precisar de uma segunda chamada só para saber quem entrou |
 | `UserResponseDto` | Saída de usuário. Método `from()` converte a entidade, expondo id, nome, e-mail, papel e data de criação |
 
 ## `dto.article`
@@ -257,6 +257,21 @@ Se preferir, chame o login direto e copie o token da resposta:
 curl -X POST http://localhost:8080/api/user/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@saudefeminina.com","password":"admin123"}'
+```
+
+Resposta:
+
+```json
+{
+  "user": {
+    "id": 1,
+    "name": "Leandro Zanella",
+    "email": "admin@saudefeminina.com",
+    "role": "ADMIN",
+    "createdAt": "2026-08-26T20:31:04.221"
+  },
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+}
 ```
 
 ## Listar usuários (só `ADMIN`)
