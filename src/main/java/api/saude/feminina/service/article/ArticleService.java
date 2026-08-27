@@ -8,6 +8,7 @@ import api.saude.feminina.repository.article.ArticleRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -22,11 +23,11 @@ public class ArticleService {
 
     /** Mais recentes primeiro, para o app já refletir as edições no topo da lista. */
     public List<ArticleModel> findAll() {
-        return articleRepository.findAllByOrderByUpdatedAtDesc();
+        return articleRepository.findAllByDeletedAtIsNullOrderByUpdatedAtDesc();
     }
 
     public ArticleModel getById(Long id) {
-        return articleRepository.findById(id)
+        return articleRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new NotFoundException("Artigo não encontrado: " + id));
     }
 
@@ -45,9 +46,12 @@ public class ArticleService {
         return articleRepository.save(articleModel);
     }
 
+    /** Exclusão lógica: o registro permanece e passa a ser ignorado nas consultas. */
     @Transactional
     public void delete(Long id) {
-        articleRepository.delete(this.getById(id));
+        var articleModel = this.getById(id);
+        articleModel.setDeletedAt(LocalDateTime.now());
+        articleRepository.save(articleModel);
     }
 
     private void copyToModel(ArticleDto articleDto, ArticleModel articleModel) {

@@ -44,6 +44,10 @@ public class UserModel implements UserDetails {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    /** Preenchido na exclusão lógica; nulo enquanto o usuário está ativo. */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     public Long getId() {
         return id;
     }
@@ -98,6 +102,14 @@ public class UserModel implements UserDetails {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 
     public RoleModel getRole() {

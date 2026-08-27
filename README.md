@@ -77,7 +77,7 @@ Camada HTTP. Recebe DTOs, dispara validação, define status e monta a resposta.
 
 | Classe | Responsabilidade |
 |---|---|
-| `UserController` | Rotas `POST /api/user/register`, `POST /api/user/login` e `GET /api/user` |
+| `UserController` | Rotas de autenticação e o CRUD de usuários em `/api/user`. Escrita e leitura restritas a `ADMIN`, exceto `login` e `register` |
 
 ## `controller.article`
 
@@ -97,7 +97,7 @@ Regras de negócio e delimitação de transações.
 
 | Classe | Responsabilidade |
 |---|---|
-| `UserService` | Operações de usuário: registrar, listar, buscar por e-mail, verificar existência. Faz o encode da senha e resolve o papel, criando-o na primeira vez que é usado. `@Transactional(readOnly = true)` na classe, sobrescrito nos métodos de escrita |
+| `UserService` | Operações de usuário: registrar, criar pela gestão, editar, excluir logicamente, listar, listar administradores e buscar. Faz o encode da senha e resolve o papel, criando-o na primeira vez que é usado. `@Transactional(readOnly = true)` na classe, sobrescrito nos métodos de escrita |
 
 ## `service.authorization`
 
@@ -111,7 +111,7 @@ Integração entre o domínio e o Spring Security.
 
 | Classe | Responsabilidade |
 |---|---|
-| `ArticleService` | CRUD de artigos. Lista da mais recente para a mais antiga por `updatedAt`, para o app refletir as edições no topo. Lança `NotFoundException` quando o id não existe |
+| `ArticleService` | CRUD de artigos, com exclusão lógica. Lista da mais recente para a mais antiga por `updatedAt`, para o app refletir as edições no topo. Lança `NotFoundException` quando o id não existe |
 
 ## `service.media`
 
@@ -125,14 +125,14 @@ Acesso a dados. Interfaces `JpaRepository`, com implementação gerada pelo Spri
 
 | Classe | Responsabilidade |
 |---|---|
-| `UserRepository` | `JpaRepository<UserModel, Long>`. Consultas derivadas `existsByEmail` e `findByEmail` |
+| `UserRepository` | `JpaRepository<UserModel, Long>`. Consultas derivadas que filtram `deletedAt is null`, mais `existsByEmail` (que considera os excluídos, mantendo o e-mail reservado) e `existsByEmailAndIdNot` (usada na edição) |
 | `RoleRepository` | `JpaRepository<RoleModel, Long>`. Consulta derivada `findByName` |
 
 ## `repository.article`
 
 | Classe | Responsabilidade |
 |---|---|
-| `ArticleRepository` | `JpaRepository<ArticleModel, Long>`. Consulta derivada `findAllByOrderByUpdatedAtDesc` |
+| `ArticleRepository` | `JpaRepository<ArticleModel, Long>`. Consultas derivadas que filtram `deletedAt is null`, ordenando por `updatedAt` decrescente |
 
 ## `model.user`
 
@@ -140,14 +140,14 @@ Entidades JPA e tipos do domínio.
 
 | Classe | Responsabilidade |
 |---|---|
-| `UserModel` | Entidade da tabela `TB_USER`. Implementa `UserDetails`, convertendo o papel em authorities do Spring Security. `ADMIN` acumula `ROLE_ADMIN` e `ROLE_USER` |
+| `UserModel` | Entidade da tabela `TB_USER`. Implementa `UserDetails`, convertendo o papel em authorities do Spring Security. `ADMIN` acumula `ROLE_ADMIN` e `ROLE_USER`. `deletedAt` marca a exclusão lógica |
 | `RoleModel` | Entidade da tabela `TB_ROLE`. Isola o papel de acesso, referenciado por `TB_USER.role_id` |
 
 ## `model.article`
 
 | Classe | Responsabilidade |
 |---|---|
-| `ArticleModel` | Entidade da tabela `TB_ARTICLE`. O `contentHtml` é `TEXT` e guarda o HTML do editor rico. `createdAt` e `updatedAt` são preenchidos pelo Hibernate |
+| `ArticleModel` | Entidade da tabela `TB_ARTICLE`. O `contentHtml` é `TEXT` e guarda o HTML do editor rico. `createdAt` e `updatedAt` são preenchidos pelo Hibernate. `deletedAt` marca a exclusão lógica |
 
 ## `dto.user`
 
@@ -155,7 +155,8 @@ Contratos de entrada e saída da API, como records. Isola a entidade do corpo da
 
 | Classe | Responsabilidade |
 |---|---|
-| `UserDto` | Entrada do registro, com as anotações de validação. O papel chega como texto: a web envia `ADMIN`, o app envia `USER` |
+| `UserDto` | Entrada de criação. No `POST /api/user` (gestão) o papel enviado é gravado; no `POST /api/user/register` (público) ele é ignorado e vale sempre `USER` |
+| `UserUpdateDto` | Entrada da edição: nome, e-mail e papel. A senha não é alterada por aqui |
 | `LoginDto` | Entrada do login |
 | `LoginResponseDto` | Saída do login: o usuário autenticado (`UserResponseDto`) e o token. O usuário vai junto para o cliente não precisar de uma segunda chamada só para saber quem entrou |
 | `UserResponseDto` | Saída de usuário. Método `from()` converte a entidade, expondo id, nome, e-mail, papel e data de criação |
@@ -187,7 +188,12 @@ Contratos de entrada e saída da API, como records. Isola a entidade do corpo da
 |---|---|---|
 | `POST` | `/api/user/register` | público |
 | `POST` | `/api/user/login` | público |
+| `POST` | `/api/user` | `ADMIN` |
 | `GET` | `/api/user` | `ADMIN` |
+| `GET` | `/api/user/admins` | `ADMIN` |
+| `GET` | `/api/user/{id}` | `ADMIN` |
+| `PUT` | `/api/user/{id}` | `ADMIN` |
+| `DELETE` | `/api/user/{id}` | `ADMIN` |
 | `GET` | `/api/article` | autenticado |
 | `GET` | `/api/article/{id}` | autenticado |
 | `POST` | `/api/article` | `ADMIN` |
@@ -197,6 +203,21 @@ Contratos de entrada e saída da API, como records. Isola a entidade do corpo da
 | `GET` | `/media/{arquivo}` | público |
 
 `GET /media/**` é público porque a tag `<img>` não envia o header `Authorization`. Exigir token nessa rota faria toda imagem quebrar na web e no app. A proteção é o nome ser um `UUID` aleatório, e só `ADMIN` conseguir criar arquivos.
+
+Há duas rotas de criação de usuário porque o papel exige permissões diferentes:
+
+- `POST /api/user/register` é **pública** e grava sempre `USER`. É o cadastro do aplicativo. O campo `userRole` enviado aqui é ignorado.
+- `POST /api/user` exige **`ADMIN`** e grava o papel enviado no corpo. É o cadastro da gestão web, o único caminho para criar outro administrador.
+
+## Exclusão lógica
+
+`DELETE` de usuário e de artigo **não apaga o registro**: preenche a coluna `deleted_at` com o horário da remoção. Todas as consultas de leitura filtram `deleted_at is null`, então o excluído desaparece das listagens e responde `404` quando buscado pelo id.
+
+No caso do usuário, a exclusão também corta o acesso na hora:
+
+- ele não consegue mais fazer login;
+- o token que ele já tinha em mãos passa a responder `401`, porque o filtro de segurança ignora usuários excluídos;
+- o e-mail dele continua reservado e não pode ser reaproveitado num novo cadastro.
 
 ---
 
@@ -208,6 +229,19 @@ docker compose up -d
 ```
 
 A aplicação sobe em `http://localhost:8080` e o Hibernate cria o schema (`spring.jpa.hibernate.ddl-auto=update`).
+
+## Carga inicial
+
+O arquivo `src/main/resources/data.sql` roda a cada inicialização, depois do Hibernate criar as tabelas, e insere os papéis e dois usuários. É idempotente: só grava o que ainda não existe, então reiniciar não duplica nada.
+
+| E-mail | Senha | Papel |
+|---|---|---|
+| `admin@saudefeminina.com` | `admin123` | `ADMIN` |
+| `maria@saudefeminina.com` | `maria123` | `USER` |
+
+O administrador precisa vir da carga porque `POST /api/user`, o único caminho para criar um `ADMIN`, exige um administrador já autenticado.
+
+Para acessar o app do emulador Android, use `http://10.0.2.2:8080` no lugar de `localhost` — no emulador, `localhost` é o próprio dispositivo.
 
 ---
 
@@ -274,10 +308,49 @@ Resposta:
 }
 ```
 
-## Listar usuários (só `ADMIN`)
+## Usuários (todas exigem `ADMIN`)
 
 ```bash
+# lista os ativos
 curl -H "Authorization: Bearer $ADMIN" http://localhost:8080/api/user
+
+# lista só os administradores
+curl -H "Authorization: Bearer $ADMIN" http://localhost:8080/api/user/admins
+
+# busca por id
+curl -H "Authorization: Bearer $ADMIN" http://localhost:8080/api/user/1
+```
+
+Criar um administrador — só a gestão web consegue, porque a rota exige `ADMIN`:
+
+```bash
+curl -X POST http://localhost:8080/api/user \
+  -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Nova Admin","email":"nova@saudefeminina.com","password":"senha123","userRole":"ADMIN"}'
+```
+
+Editar. O corpo não leva senha; trocar apenas o nome, mantendo o mesmo e-mail, funciona normalmente:
+
+```bash
+curl -X PUT http://localhost:8080/api/user/2 \
+  -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Maria Souza Silva","email":"maria@saudefeminina.com","userRole":"USER"}'
+```
+
+Excluir. Responde `204`, e o registro continua no banco com `deleted_at` preenchido:
+
+```bash
+curl -i -X DELETE http://localhost:8080/api/user/2 -H "Authorization: Bearer $ADMIN"
+
+# some da listagem
+curl -H "Authorization: Bearer $ADMIN" http://localhost:8080/api/user
+
+# e não consegue mais entrar
+curl -i -X POST http://localhost:8080/api/user/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"maria@saudefeminina.com","password":"maria123"}'
 ```
 
 ## Criar artigo
@@ -340,7 +413,7 @@ curl -i http://localhost:8080/media/75850497-4697-42ae-97da-ffc8d22cadeb.png
 curl -i -X DELETE http://localhost:8080/api/article/1 -H "Authorization: Bearer $ADMIN"
 ```
 
-Responde `204`. Na próxima listagem o artigo já não aparece, e some do app.
+Responde `204`. É exclusão lógica: o artigo continua na tabela com `deleted_at` preenchido, mas some da listagem e do app, e passa a responder `404` quando buscado pelo id.
 
 ## Erros esperados
 
@@ -356,6 +429,15 @@ curl -i -X POST http://localhost:8080/api/article \
 
 # 404 - artigo inexistente
 curl -i -H "Authorization: Bearer $USER" http://localhost:8080/api/article/999
+
+# 403 - USER tentando acessar a gestão de usuários
+curl -i -H "Authorization: Bearer $USER" http://localhost:8080/api/user/admins
+
+# 409 - e-mail de outro usuário na edição
+curl -i -X PUT http://localhost:8080/api/user/2 \
+  -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Maria","email":"admin@saudefeminina.com","userRole":"USER"}'
 
 # 400 - campo obrigatório ausente
 curl -i -X POST http://localhost:8080/api/article \
